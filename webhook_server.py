@@ -5,12 +5,9 @@ Nhận webhook từ TradingView và forward đến Telegram
 
 import os
 import logging
-import threading
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 from telegram_notifier import send_alert
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
 
 # Load environment variables
 load_dotenv()
@@ -29,114 +26,6 @@ app = Flask(__name__)
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "tradingview_secret_2026")
-
-
-# ============== TELEGRAM BOT COMMANDS ==============
-
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler cho lệnh /start"""
-    welcome_message = """
-🤖 <b>TradingView Alert Bot</b>
-
-Chào mừng bạn! Bot này nhận tín hiệu từ TradingView và gửi thông báo đến đây.
-
-📌 <b>Commands:</b>
-/start - Hiển thị tin nhắn chào mừng
-/help - Hướng dẫn thiết lập TradingView
-/status - Kiểm tra trạng thái bot
-
-⚡ Khi có tín hiệu từ TradingView, bạn sẽ nhận thông báo tự động!
-"""
-    await update.message.reply_text(welcome_message, parse_mode='HTML')
-
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler cho lệnh /help"""
-    help_message = """
-📡 <b>Hướng dẫn thiết lập TradingView Webhook</b>
-
-<b>Bước 1:</b> Mở TradingView và thêm indicator Reversal Pro 3.0
-
-<b>Bước 2:</b> Tạo Alert BULLISH
-• Click chuột phải → Add Alert (hoặc Alt+A)
-• Condition: Reversal Pro v3.0 → Bullish Reversal
-• Trigger: Once per bar close ✅
-• Message:
-<code>{
-  "secret": "tv_alert_secret_2026_xyz",
-  "symbol": "{{ticker}}",
-  "timeframe": "{{interval}}",
-  "indicator": "Reversal Pro 3.0",
-  "signal": "BULLISH",
-  "price": "{{close}}",
-  "time": "{{timenow}}"
-}</code>
-• Notifications → ✅ Webhook URL
-• URL: Webhook server của bạn + /webhook
-
-<b>Bước 3:</b> Tạo Alert BEARISH (tương tự, thay BULLISH → BEARISH)
-
-⚠️ <b>Lưu ý:</b>
-• Cần TradingView Pro để dùng Webhook
-• Tạo 2 alerts riêng (BULLISH + BEARISH)
-• KHÔNG dùng {{strategy.order.action}} với Indicator
-"""
-    await update.message.reply_text(help_message, parse_mode='HTML')
-
-
-async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler cho lệnh /status"""
-    status_message = """
-✅ <b>Bot Status: Online</b>
-
-🔗 Webhook đang hoạt động
-📡 Sẵn sàng nhận tín hiệu từ TradingView
-"""
-    await update.message.reply_text(status_message, parse_mode='HTML')
-
-
-def run_telegram_bot():
-    """Chạy Telegram bot trong thread riêng - compatible với gunicorn"""
-    import asyncio
-    
-    if not TELEGRAM_BOT_TOKEN:
-        logger.warning("TELEGRAM_BOT_TOKEN not set, bot commands disabled")
-        return
-    
-    try:
-        # Create new event loop for this thread
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        # Build application
-        application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
-        
-        # Add handlers
-        application.add_handler(CommandHandler("start", start_command))
-        application.add_handler(CommandHandler("help", help_command))
-        application.add_handler(CommandHandler("status", status_command))
-        
-        logger.info("Starting Telegram bot polling...")
-        
-        # Use run_polling directly - this blocks and handles everything
-        application.run_polling(drop_pending_updates=True, close_loop=False)
-        
-    except Exception as e:
-        logger.error(f"Failed to start Telegram bot: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-
-
-# ============== AUTO-START BOT WHEN MODULE IS IMPORTED ==============
-# This runs when gunicorn imports the module
-def start_bot_thread():
-    """Start bot in background thread - works with gunicorn"""
-    bot_thread = threading.Thread(target=run_telegram_bot, daemon=True)
-    bot_thread.start()
-    logger.info("Telegram bot thread started (gunicorn compatible)")
-
-# Start bot when module is loaded (for Railway/gunicorn)
-start_bot_thread()
 
 
 @app.route("/", methods=["GET"])
@@ -256,7 +145,7 @@ def help_page():
             <p>4. Trong tab <strong>Notifications</strong>:</p>
             <ul>
                 <li>✅ Tick chọn <strong>Webhook URL</strong></li>
-                <li>Nhập URL: <code>https://web-production-79fba.up.railway.app/webhook</code></li>
+                <li>Nhập URL: <code>https://your-server.railway.app/webhook</code></li>
             </ul>
             <p>5. Click <strong>Save</strong></p>
         </div>
@@ -326,7 +215,5 @@ def test_alert():
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
-    # Bot already started when module loaded (see start_bot_thread())
     logger.info(f"Starting webhook server on port {port}")
     app.run(host="0.0.0.0", port=port, debug=False)
-
