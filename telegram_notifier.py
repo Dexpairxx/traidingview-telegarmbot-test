@@ -67,7 +67,29 @@ def format_alert_message(data: dict) -> str:
     timeframe = data.get("timeframe", "N/A")
     indicator = data.get("indicator", "N/A")
     price = data.get("price", "N/A")
-    time_str = data.get("time", datetime.now().strftime("%Y-%m-%d %H:%M UTC"))
+    time_str = data.get("time", "")
+    
+    # Format thời gian sang múi giờ Việt Nam (GMT+7)
+    try:
+        from datetime import timezone, timedelta
+        # Parse ISO format từ TradingView (2026-02-06T13:25:00Z)
+        if time_str and "T" in time_str:
+            # Remove 'Z' and parse
+            clean_time = time_str.replace("Z", "")
+            utc_time = datetime.fromisoformat(clean_time)
+            # Convert to Vietnam timezone (UTC+7)
+            vietnam_tz = timezone(timedelta(hours=7))
+            vietnam_time = utc_time.replace(tzinfo=timezone.utc).astimezone(vietnam_tz)
+            time_str = vietnam_time.strftime("%d/%m/%Y %H:%M (GMT+7)")
+        elif not time_str:
+            # Fallback: sử dụng thời gian hiện tại
+            from datetime import timezone, timedelta
+            vietnam_tz = timezone(timedelta(hours=7))
+            now = datetime.now(vietnam_tz)
+            time_str = now.strftime("%d/%m/%Y %H:%M (GMT+7)")
+    except Exception:
+        # Giữ nguyên nếu không parse được
+        pass
     
     # Format giá nếu là số
     try:
