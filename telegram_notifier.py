@@ -1,0 +1,147 @@
+"""
+Telegram Notifier Module
+Gửi thông báo từ TradingView alerts đến Telegram
+"""
+
+import asyncio
+from telegram import Bot
+from telegram.constants import ParseMode
+from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def format_alert_message(data: dict) -> str:
+    """
+    Format webhook data thành message đẹp cho Telegram
+    
+    Args:
+        data: Dict chứa thông tin từ TradingView webhook
+        
+    Returns:
+        Formatted string message
+    """
+    signal = data.get("signal", "UNKNOWN").upper()
+    
+    # Emoji theo loại tín hiệu
+    if signal in ["BULLISH", "BUY", "LONG", "GREEN"]:
+        signal_emoji = "🟢"
+        signal_text = "BULLISH"
+    elif signal in ["BEARISH", "SELL", "SHORT", "RED"]:
+        signal_emoji = "🔴"
+        signal_text = "BEARISH"
+    elif signal in ["OVERSOLD"]:
+        signal_emoji = "🟢"
+        signal_text = "RSI OVERSOLD (Có thể đảo chiều lên)"
+    elif signal in ["OVERBOUGHT"]:
+        signal_emoji = "🔴"
+        signal_text = "RSI OVERBOUGHT (Có thể đảo chiều xuống)"
+    else:
+        signal_emoji = "⚪"
+        signal_text = signal
+    
+    # Lấy thông tin từ data
+    symbol = data.get("symbol", "N/A")
+    timeframe = data.get("timeframe", "N/A")
+    indicator = data.get("indicator", "N/A")
+    price = data.get("price", "N/A")
+    time_str = data.get("time", datetime.now().strftime("%Y-%m-%d %H:%M UTC"))
+    
+    # Format giá nếu là số
+    try:
+        price_float = float(price)
+        if price_float >= 1000:
+            price = f"${price_float:,.2f}"
+        else:
+            price = f"${price_float:.4f}"
+    except (ValueError, TypeError):
+        pass
+    
+    # Map timeframe
+    timeframe_map = {
+        "1": "1m", "5": "5m", "15": "15m", "30": "30m",
+        "60": "H1", "240": "H4", "D": "Daily", "1D": "Daily",
+        "W": "Weekly", "1W": "Weekly", "M": "Monthly", "1M": "Monthly",
+        "1H": "H1", "4H": "H4"
+    }
+    timeframe_display = timeframe_map.get(timeframe, timeframe)
+    
+    message = f"""
+{signal_emoji} <b>{signal_text}</b>
+
+📊 <b>Symbol:</b> {symbol}
+⏱️ <b>Timeframe:</b> {timeframe_display}
+📈 <b>Indicator:</b> {indicator}
+💰 <b>Price:</b> {price}
+🕐 <b>Time:</b> {time_str}
+"""
+    
+    return message.strip()
+
+
+async def send_telegram_message_async(bot_token: str, chat_id: str, message: str) -> bool:
+    """
+    Gửi message đến Telegram (async version)
+    
+    Args:
+        bot_token: Telegram Bot API token
+        chat_id: Chat ID để gửi message
+        message: Nội dung message
+        
+    Returns:
+        True nếu gửi thành công, False nếu thất bại
+    """
+    try:
+        bot = Bot(token=bot_token)
+        await bot.send_message(
+            chat_id=chat_id,
+            text=message,
+            parse_mode=ParseMode.HTML
+        )
+        logger.info(f"Telegram message sent successfully to chat_id: {chat_id}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send Telegram message: {e}")
+        return False
+
+
+def send_telegram_message(bot_token: str, chat_id: str, message: str) -> bool:
+    """
+    Gửi message đến Telegram (sync wrapper)
+    
+    Args:
+        bot_token: Telegram Bot API token
+        chat_id: Chat ID để gửi message
+        message: Nội dung message
+        
+    Returns:
+        True nếu gửi thành công, False nếu thất bại
+    """
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(
+            send_telegram_message_async(bot_token, chat_id, message)
+        )
+        loop.close()
+        return result
+    except Exception as e:
+        logger.error(f"Error in sync wrapper: {e}")
+        return False
+
+
+def send_alert(bot_token: str, chat_id: str, alert_data: dict) -> bool:
+    """
+    Main function: Format và gửi alert đến Telegram
+    
+    Args:
+        bot_token: Telegram Bot API token
+        chat_id: Chat ID để gửi message
+        alert_data: Dict chứa thông tin alert từ TradingView
+        
+    Returns:
+        True nếu gửi thành công, False nếu thất bại
+    """
+    message = format_alert_message(alert_data)
+    return send_telegram_message(bot_token, chat_id, message)
