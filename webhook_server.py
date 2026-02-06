@@ -96,18 +96,15 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def run_telegram_bot():
-    """Chạy Telegram bot trong thread riêng"""
+    """Chạy Telegram bot trong thread riêng - compatible với gunicorn"""
     import asyncio
     
     if not TELEGRAM_BOT_TOKEN:
         logger.warning("TELEGRAM_BOT_TOKEN not set, bot commands disabled")
         return
     
-    try:
-        # Create new event loop for this thread
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
+    async def run_bot():
+        """Async function để chạy bot polling"""
         application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
         
         # Add handlers
@@ -115,8 +112,22 @@ def run_telegram_bot():
         application.add_handler(CommandHandler("help", help_command))
         application.add_handler(CommandHandler("status", status_command))
         
-        logger.info("Starting Telegram bot polling...")
-        application.run_polling(drop_pending_updates=True)
+        # Initialize and start polling manually (không dùng run_polling)
+        await application.initialize()
+        await application.start()
+        await application.updater.start_polling(drop_pending_updates=True)
+        
+        logger.info("Telegram bot polling started successfully!")
+        
+        # Keep running forever
+        while True:
+            await asyncio.sleep(3600)
+    
+    try:
+        # Create new event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(run_bot())
     except Exception as e:
         logger.error(f"Failed to start Telegram bot: {e}")
 
