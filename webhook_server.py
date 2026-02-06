@@ -97,11 +97,17 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def run_telegram_bot():
     """Chạy Telegram bot trong thread riêng"""
+    import asyncio
+    
     if not TELEGRAM_BOT_TOKEN:
         logger.warning("TELEGRAM_BOT_TOKEN not set, bot commands disabled")
         return
     
     try:
+        # Create new event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
         application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
         
         # Add handlers
@@ -113,6 +119,18 @@ def run_telegram_bot():
         application.run_polling(drop_pending_updates=True)
     except Exception as e:
         logger.error(f"Failed to start Telegram bot: {e}")
+
+
+# ============== AUTO-START BOT WHEN MODULE IS IMPORTED ==============
+# This runs when gunicorn imports the module
+def start_bot_thread():
+    """Start bot in background thread - works with gunicorn"""
+    bot_thread = threading.Thread(target=run_telegram_bot, daemon=True)
+    bot_thread.start()
+    logger.info("Telegram bot thread started (gunicorn compatible)")
+
+# Start bot when module is loaded (for Railway/gunicorn)
+start_bot_thread()
 
 
 @app.route("/", methods=["GET"])
@@ -302,12 +320,7 @@ def test_alert():
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
-    
-    # Start Telegram bot in a separate thread
-    bot_thread = threading.Thread(target=run_telegram_bot, daemon=True)
-    bot_thread.start()
-    logger.info("Telegram bot thread started")
-    
-    # Start Flask server
+    # Bot already started when module loaded (see start_bot_thread())
     logger.info(f"Starting webhook server on port {port}")
     app.run(host="0.0.0.0", port=port, debug=False)
+
