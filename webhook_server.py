@@ -103,8 +103,12 @@ def run_telegram_bot():
         logger.warning("TELEGRAM_BOT_TOKEN not set, bot commands disabled")
         return
     
-    async def run_bot():
-        """Async function để chạy bot polling"""
+    try:
+        # Create new event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # Build application
         application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
         
         # Add handlers
@@ -112,24 +116,15 @@ def run_telegram_bot():
         application.add_handler(CommandHandler("help", help_command))
         application.add_handler(CommandHandler("status", status_command))
         
-        # Initialize and start polling manually (không dùng run_polling)
-        await application.initialize()
-        await application.start()
-        await application.updater.start_polling(drop_pending_updates=True)
+        logger.info("Starting Telegram bot polling...")
         
-        logger.info("Telegram bot polling started successfully!")
+        # Use run_polling directly - this blocks and handles everything
+        application.run_polling(drop_pending_updates=True, close_loop=False)
         
-        # Keep running forever
-        while True:
-            await asyncio.sleep(3600)
-    
-    try:
-        # Create new event loop for this thread
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(run_bot())
     except Exception as e:
         logger.error(f"Failed to start Telegram bot: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
 
 
 # ============== AUTO-START BOT WHEN MODULE IS IMPORTED ==============
