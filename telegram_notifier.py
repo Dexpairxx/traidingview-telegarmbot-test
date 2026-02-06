@@ -113,7 +113,7 @@ def format_alert_message(data: dict) -> str:
     message = f"""
 {signal_emoji} <b>{signal_text}</b>
 
-📊 <b>Symbol:</b> {symbol}
+📊 <b>Crypto:</b> {symbol}
 ⏱️ <b>Timeframe:</b> {timeframe_display}
 📈 <b>Indicator:</b> {indicator}
 💰 <b>Price:</b> {price}
