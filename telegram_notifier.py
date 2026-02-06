@@ -12,6 +12,24 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def detect_signal_from_data(data: dict) -> str:
+    """
+    Detect signal type từ các field trong data
+    Xử lý trường hợp {{strategy.order.action}} không hoạt động với indicators
+    """
+    signal = data.get("signal", "").upper()
+    
+    # Nếu signal là placeholder chưa được thay thế
+    placeholder_patterns = ["{{", "}}", "STRATEGY", "ORDER", "ACTION"]
+    is_placeholder = any(p in signal for p in placeholder_patterns)
+    
+    if not is_placeholder and signal:
+        return signal
+    
+    # Fallback: trả về REVERSAL nếu không detect được
+    return "REVERSAL"
+
+
 def format_alert_message(data: dict) -> str:
     """
     Format webhook data thành message đẹp cho Telegram
@@ -22,7 +40,7 @@ def format_alert_message(data: dict) -> str:
     Returns:
         Formatted string message
     """
-    signal = data.get("signal", "UNKNOWN").upper()
+    signal = detect_signal_from_data(data)
     
     # Emoji theo loại tín hiệu
     if signal in ["BULLISH", "BUY", "LONG", "GREEN"]:
@@ -31,6 +49,9 @@ def format_alert_message(data: dict) -> str:
     elif signal in ["BEARISH", "SELL", "SHORT", "RED"]:
         signal_emoji = "🔴"
         signal_text = "BEARISH"
+    elif signal in ["REVERSAL"]:
+        signal_emoji = "🔄"
+        signal_text = "REVERSAL"
     elif signal in ["OVERSOLD"]:
         signal_emoji = "🟢"
         signal_text = "RSI OVERSOLD (Có thể đảo chiều lên)"
